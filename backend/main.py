@@ -111,6 +111,11 @@ async def serve_frontend():
     return JSONResponse({'error': 'Frontend not found'}, status_code=404)
 
 
+@app.get('/api/debug/jobs')
+async def debug_jobs():
+    return jobs
+
+
 if FRONTEND_DIR.exists():
     if (FRONTEND_DIR / 'css').exists():
         app.mount('/css', StaticFiles(directory=str(FRONTEND_DIR / 'css')), name='css')
