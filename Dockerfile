@@ -7,6 +7,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
+# Set HF cache home inside /app/cache so both build-time and runtime load from it
+ENV HF_HOME=/app/cache/huggingface
+
 # Install Python dependencies first (better Docker layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -25,6 +28,12 @@ COPY . .
 
 # Create required directories
 RUN mkdir -p output cache logs
+
+# Set up user and ownership for Hugging Face Spaces (UID 1000)
+RUN useradd -m -u 1000 user && \
+    chown -R user:user /app
+
+USER user
 
 # Expose port (HF Spaces uses 7860)
 EXPOSE 7860
