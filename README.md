@@ -1,7 +1,7 @@
 ---
 title: Bhasha Setu
 emoji: 🪷
-colorFrom: orange
+colorFrom: indigo
 colorTo: red
 sdk: docker
 app_port: 7860
