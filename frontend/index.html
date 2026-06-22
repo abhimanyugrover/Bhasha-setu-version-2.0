@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Bhasha Setu — Free, open-source AI video dubbing pipeline for Indian languages. Translate academic videos into Hindi, Tamil, Telugu, and more.">
+    <title>Bhasha Setu — AI Video Dubbing</title>
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E🪷%3C/text%3E%3C/svg%3E">
+    <!-- Main Style Sheet -->
+    <link rel="stylesheet" href="/css/style.css">
+    
+    <!-- Scripts (Defer for non-blocking load) -->
+    <script src="/js/api.js" defer></script>
+    <script src="/js/components.js" defer></script>
+    <script src="/js/app.js" defer></script>
+</head>
+<body>
+
+    <!-- ── Top Navbar ── -->
+    <nav class="nav">
+        <div class="nav-logo">
+            <span class="nav-icon">🪷</span>
+            <span class="nav-title">Bhasha Setu</span>
+        </div>
+        <button id="theme-toggle" class="btn-icon" title="Toggle Theme">🌙</button>
+    </nav>
+
+    <!-- ── Tab Navigation ── -->
+    <div class="tabs-container">
+        <div class="tabs">
+            <button class="tab active" data-tab="home">🏠 Home</button>
+            <button class="tab" data-tab="dub">🎬 Dub Video</button>
+            <button class="tab" data-tab="translate">🌐 Text Translate</button>
+            <button class="tab" data-tab="chat">💬 AI Chat</button>
+            <button class="tab" data-tab="history">📋 History</button>
+            <button class="tab" data-tab="roadmap">🗺️ Roadmap</button>
+        </div>
+    </div>
+
+    <!-- ── Main Application Body ── -->
+    <main class="main-content">
+
+        <!-- 🏠 HOME TAB PANEL -->
+        <div id="panel-home" class="tab-panel active">
+            <section class="hero">
+                <div class="hero-badge">🪷 Language Bridge for Education</div>
+                <h1 class="h-xl">Dub Videos into <span class="gradient-text">Indian Languages</span></h1>
+                <p class="hero-sub">
+                    Translate lectures and educational videos into Hindi, Tamil, Telugu, Kannada, Bengali, and other regional scripts instantly. Built completely with free, open-source AI.
+                </p>
+                <div id="home-session-status" style="margin-top: 24px;"></div>
+            </section>
+
+            <!-- Quick Stats -->
+            <div class="stats-bar">
+                <div class="stat-cell">
+                    <div class="stat-num">12+</div>
+                    <div class="stat-label">Indian Scripts</div>
+                </div>
+                <div class="stat-cell">
+                    <div class="stat-num">100%</div>
+                    <div class="stat-label">Free & Open Source</div>
+                </div>
+                <div class="stat-cell">
+                    <div class="stat-num">16 GB</div>
+                    <div class="stat-label">RAM Optimised</div>
+                </div>
+                <div class="stat-cell">
+                    <div class="stat-num">$0</div>
+                    <div class="stat-label">Running Costs</div>
+                </div>
+            </div>
+
+            <!-- Features Section -->
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎙️</div>
+                    <div class="feature-title">Whisper Transcription</div>
+                    <div class="feature-desc">Powered by faster-whisper. High accuracy local speech-to-text with auto language detection.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <div class="feature-title">NLLB Translation</div>
+                    <div class="feature-desc">Uses Meta's No Language Left Behind (600M parameter model) tuned specifically for regional dialects.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔊</div>
+                    <div class="feature-title">Neural TTS Backends</div>
+                    <div class="feature-desc">Outputs clear speech using Microsoft edge-tts and Google gTTS engine, offering natural Indian accents.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎬</div>
+                    <div class="feature-title">Smart FFmpeg Muxing</div>
+                    <div class="feature-desc">Automatically adjusts volume boosts, shifts pitch, and merges background soundtracks back to target files.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💬</div>
+                    <div class="feature-title">Video-Aware AI Chat</div>
+                    <div class="feature-desc">Ask questions, request summaries, or clarify difficult topics about your dubbed video with contextual AI.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <div class="feature-title">Privacy Ephemeral Space</div>
+                    <div class="feature-desc">Files are temporarily processed and auto-cleaned. No permanent storage, ideal for student compliance.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🎬 DUB TAB PANEL -->
+        <div id="panel-dub" class="tab-panel">
+            <div class="eyebrow">DUBBING STUDIO</div>
+            <h2 class="h-sec">Upload & Dub Video</h2>
+            
+            <div class="dub-layout">
+                <!-- Config Card -->
+                <div class="dub-config card">
+                    <div class="label">Video Source</div>
+                    
+                    <!-- Drag and Drop Zone -->
+                    <div class="file-upload" id="drop-zone">
+                        <div class="file-upload-icon">📤</div>
+                        <div class="file-upload-text" id="drop-zone-text">Drag and drop your lecture video here, or <span class="file-upload-link">browse</span></div>
+                        <div class="file-upload-hint">Supports MP4, WebM (Recommended under 50MB for faster speed)</div>
+                        <div id="file-details" class="file-name-display"></div>
+                        <input type="file" id="video-file" accept="video/*" style="display: none;">
+                    </div>
+
+                    <div style="text-align: center; margin: 16px 0; color: var(--text3); font-weight: 700; font-size: 0.8rem;">— OR —</div>
+
+                    <div>
+                        <label class="label" for="video-url">Public Video Link</label>
+                        <input type="text" id="video-url" class="input" placeholder="Paste YouTube or public MP4 link here...">
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <label class="label" for="target-language">Target Language</label>
+                        <select id="target-language" class="select">
+                            <option value="" disabled selected>Select regional language...</option>
+                        </select>
+                    </div>
+
+                    <!-- Expandable Advanced Options -->
+                    <details class="options-expander" style="margin-top: 20px;">
+                        <summary>⚙️ Advanced Audio Settings</summary>
+                        <div class="options-grid" style="margin-top: 14px;">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="gen-srt" checked>
+                                <span>Generate Subtitle file (.SRT)</span>
+                            </label>
+                            
+                            <div class="slider-group">
+                                <label for="voice-pitch">
+                                    <span>Voice Pitch Shift</span>
+                                    <span id="voice-pitch-val">0%</span>
+                                </label>
+                                <input type="range" id="voice-pitch" min="-20" max="20" value="0" class="slider">
+                            </div>
+
+                            <div class="slider-group">
+                                <label for="vol-boost">
+                                    <span>Vocal Volume Boost</span>
+                                    <span id="vol-boost-val">2.0x</span>
+                                </label>
+                                <input type="range" id="vol-boost" min="0.5" max="5.0" step="0.1" value="2.0" class="slider">
+                            </div>
+
+                            <div class="slider-group">
+                                <label for="bg-music">
+                                    <span>Background Music Vol</span>
+                                    <span id="bg-music-val">0%</span>
+                                </label>
+                                <input type="range" id="bg-music" min="0.0" max="1.0" step="0.05" value="0.0" class="slider">
+                            </div>
+                        </div>
+                    </details>
+
+                    <button id="start-dub-btn" class="btn btn-primary full-width" style="margin-top: 24px;">🎬 Start Dubbing</button>
+                </div>
+
+                <!-- Result Card -->
+                <div class="dub-result" id="dub-result">
+                    <div class="card" style="height: 100%; display: flex; align-items: center; justify-content: center; min-height: 380px;">
+                        <div class="empty-state">
+                            <div class="empty-icon">⚙️</div>
+                            <h3 class="empty-title">Ready to Dub</h3>
+                            <p class="empty-sub">Once you click 'Start Dubbing', real-time processing logs and download options will display in this container.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🌐 TRANSLATE TAB PANEL -->
+        <div id="panel-translate" class="tab-panel">
+            <div class="eyebrow">QUICK UTILITIES</div>
+            <h2 class="h-sec">Text Translator</h2>
+            
+            <div class="translate-layout">
+                <!-- Source Col -->
+                <div class="translate-col card">
+                    <label class="label" for="translate-src">Source Language</label>
+                    <select id="translate-src" class="select">
+                        <option value="auto" selected>Auto-detect</option>
+                    </select>
+                    
+                    <label class="label" for="translate-input" style="margin-top: 10px;">Enter Text</label>
+                    <textarea id="translate-input" class="textarea" placeholder="Enter word, sentence, or paragraphs here..."></textarea>
+                    
+                    <button id="translate-btn" class="btn btn-primary full-width">🌐 Translate</button>
+                </div>
+
+                <!-- Target Col -->
+                <div class="translate-col card">
+                    <label class="label" for="translate-tgt">Target Language</label>
+                    <select id="translate-tgt" class="select"></select>
+                    
+                    <label class="label" for="translate-output" style="margin-top: 10px;">Translated Text</label>
+                    <textarea id="translate-output" class="textarea" readonly placeholder="Output translated text..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 💬 AI CHAT TAB PANEL -->
+        <div id="panel-chat" class="tab-panel">
+            <div class="eyebrow">VIDEO CO-PILOT</div>
+            <h2 class="h-sec">Bhasha Setu AI Chat</h2>
+            
+            <div class="chat-layout">
+                <!-- Chat Window -->
+                <div class="chat-window">
+                    <div class="chat-topbar">
+                        <div class="chat-topbar-left">
+                            <div class="chat-avatar-lg">🪷</div>
+                            <div>
+                                <div class="chat-name">Bhasha Setu Assistant</div>
+                                <div class="chat-status">
+                                    <div class="status-dot"></div>
+                                    <span>Online (Zephyr-7B)</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <select id="chat-language" class="select-sm" style="width: auto;">
+                                <option value="English" selected>Reply in English</option>
+                                <option value="Hindi">Reply in Hindi (हिन्दी)</option>
+                                <option value="Tamil">Reply in Tamil (தமிழ்)</option>
+                                <option value="Telugu">Reply in Telugu (తెలుగు)</option>
+                                <option value="Kannada">Reply in Kannada (ಕನ್ನಡ)</option>
+                                <option value="Malayalam">Reply in Malayalam (മലയാളം)</option>
+                                <option value="Bengali">Reply in Bengali (বাংলা)</option>
+                                <option value="Marathi">Reply in Marathi (मराठी)</option>
+                                <option value="Gujarati">Reply in Gujarati (ગુજરાતી)</option>
+                                <option value="Punjabi">Reply in Punjabi (ਪੰਜਾਬੀ)</option>
+                                <option value="Urdu">Reply in Urdu (اردو)</option>
+                                <option value="Odia">Reply in Odia (ଓଡ଼ିଆ)</option>
+                                <option value="Assamese">Reply in Assamese (অসমীয়া)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Message Feed -->
+                    <div id="chat-messages" class="chat-messages">
+                        <!-- Message items injected dynamically by JS -->
+                    </div>
+
+                    <!-- Input Feed -->
+                    <div class="chat-input-bar">
+                        <input type="text" id="chat-input" class="chat-input" placeholder="Type a message or click a suggestion on the right...">
+                        <button id="send-chat-btn" class="btn-send">✉️</button>
+                    </div>
+                </div>
+
+                <!-- Chat Sidebar -->
+                <div class="chat-sidebar">
+                    <div class="card">
+                        <div id="chat-context-status"></div>
+                        <button id="clear-chat-btn" class="btn btn-secondary full-width" style="margin-top: 14px;">🗑️ Clear Chat History</button>
+                    </div>
+
+                    <div class="card">
+                        <div class="eyebrow" style="margin-bottom: 12px;">Suggested Prompts</div>
+                        <div class="quick-prompt" onclick="document.getElementById('chat-input').value = 'Summarize this video lecture in key takeaways.'; App.sendChatMessage();">📝 Summarize video lecture</div>
+                        <div class="quick-prompt" onclick="document.getElementById('chat-input').value = 'What are the main definitions or concepts explained?'; App.sendChatMessage();">🔑 Explain main concepts</div>
+                        <div class="quick-prompt" onclick="document.getElementById('chat-input').value = 'Explain the difficult terms in simple Hindi.'; App.sendChatMessage();">🇮🇳 Explain terms in Hindi</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 📋 HISTORY TAB PANEL -->
+        <div id="panel-history" class="tab-panel">
+            <div class="eyebrow">SAVED ARCHIVE</div>
+            <h2 class="h-sec">Your Dubbed Library</h2>
+            
+            <div id="history-container">
+                <!-- Dubbing history item cards injected here -->
+            </div>
+        </div>
+
+        <!-- 🗺️ ROADMAP TAB PANEL -->
+        <div id="panel-roadmap" class="tab-panel">
+            <div class="eyebrow">DEVELOPMENT VISION</div>
+            <h2 class="h-sec">Project Roadmap</h2>
+            
+            <div class="roadmap-layout">
+                <!-- Roadmap List -->
+                <div class="roadmap-main">
+                    <div class="roadmap-card">
+                        <div class="rm-tag">Upcoming Version 2.1</div>
+                        <div class="rm-title">🎛️ Human-in-the-Loop Edit Interface</div>
+                        <span class="pill pill-soon">In Progress</span>
+                        <div class="rm-desc">Allows students/teachers to pause after transcription, manually edit translated sentences, fix spellings, and adjust speech speeds before generating audio files.</div>
+                    </div>
+
+                    <div class="roadmap-card">
+                        <div class="rm-tag">Upcoming Version 2.2</div>
+                        <div class="rm-title">📦 Batch & Multi-Video Dubbing</div>
+                        <span class="pill pill-soon">In Progress</span>
+                        <div class="rm-desc">Upload multiple video lectures or a playlist link, queue them sequentially, and automatically process the entire batch.</div>
+                    </div>
+
+                    <div class="roadmap-card">
+                        <div class="rm-tag">Future Version 3.0</div>
+                        <div class="rm-title">🔊 Target Voice Cloning & Alignment</div>
+                        <span class="pill pill-plan">Planned</span>
+                        <div class="rm-desc">Uses deep learning speaker encoders to clone the original teacher's voice profile, producing dubbed regional language audio in their own voice.</div>
+                    </div>
+
+                    <div class="roadmap-card">
+                        <div class="rm-tag">Future Version 3.1</div>
+                        <div class="rm-title">📱 Offline Progressive Web App (PWA)</div>
+                        <span class="pill pill-plan">Planned</span>
+                        <div class="rm-desc">Installable mobile and desktop browser wrapper that supports offline storage of dubbed lectures, letting students study without internet access.</div>
+                    </div>
+                </div>
+
+                <!-- Sidebar Details -->
+                <div class="roadmap-sidebar card author-card">
+                    <div class="author-emoji">🪷</div>
+                    <div class="author-name">Bhasha Setu</div>
+                    <div class="author-info">Student Language Access Suite</div>
+                    <hr class="divider">
+                    <p class="author-desc">
+                        Bhasha Setu is designed to break language barriers in education across India. By making advanced dubbing tools 100% free and open source, we enable access to the world's best educational content in regional mother tongues.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Bhasha Setu v2 — Python Dependencies
+# Fully open-source / free stack — no AWS, no paid APIs
+# Install with: pip install -r requirements.txt
+#
+# System dependency:
+#   Ubuntu/Debian: sudo apt install ffmpeg
+#   macOS:         brew install ffmpeg
+#   Windows:       https://ffmpeg.org/download.html (add to PATH)
+
+# ── Backend Server ────────────────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+websockets>=12.0
+
+# ── Speech-to-Text (replaces AWS Transcribe) ──────────────────────────────────
+faster-whisper>=1.0.0
+
+# ── Translation (replaces AWS Translate) ──────────────────────────────────────
+transformers>=4.40.0
+sentencepiece>=0.2.0
+ctranslate2>=4.0.0
+torch>=2.0.0
+
+# ── Text Translator Tab (Google Translate wrapper) ────────────────────────────
+deep-translator>=1.11.4
+
+# ── TTS Engines (both free) ──────────────────────────────────────────────────
+edge-tts>=6.1.10
+gTTS>=2.5.1
+
+# ── Video URL Downloader ─────────────────────────────────────────────────────
+yt-dlp>=2025.3.25
+
+# ── AI Chat (HuggingFace Inference API — free) ───────────────────────────────
+huggingface-hub>=0.23.0

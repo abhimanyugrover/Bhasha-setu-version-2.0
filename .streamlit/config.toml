@@ -1,0 +1,11 @@
+[theme]
+# Sync with app's default dark_mode so Streamlit chrome matches our UI
+base = "dark"
+primaryColor = "#FF9933"
+backgroundColor = "#0a0614"
+secondaryBackgroundColor = "rgba(255,255,255,0.07)"
+textColor = "#f0f0f2"
+font = "sans serif"
+
+[server]
+headless = true
