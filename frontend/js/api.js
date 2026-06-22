@@ -12,7 +12,7 @@ const API = {
      * @returns {Promise<Array<{name:string, native_name:string, tts_engine:string}>>}
      */
     async getLanguages() {
-        const res = await fetch(`${this.base}/api/languages`);
+        const res = await fetch(`${this.base}/api/languages`, { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to fetch languages');
         return res.json();
     },
@@ -27,6 +27,7 @@ const API = {
         const res = await fetch(`${this.base}/api/dub`, {
             method: 'POST',
             body: formData,
+            credentials: 'include',
         });
         if (!res.ok) {
             let detail = 'Dubbing failed';
@@ -45,7 +46,7 @@ const API = {
      * @returns {Promise<Object>}
      */
     async getJobStatus(jobId) {
-        const res = await fetch(`${this.base}/api/dub/${jobId}`);
+        const res = await fetch(`${this.base}/api/dub/${jobId}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to fetch job status');
         return res.json();
     },
@@ -118,6 +119,7 @@ const API = {
                 language: language || 'English',
                 history: history || [],
             }),
+            credentials: 'include',
         });
         if (!res.ok) throw new Error('Chat request failed');
         const data = await res.json();
@@ -140,6 +142,7 @@ const API = {
                 source_lang: sourceLang,
                 target_lang: targetLang,
             }),
+            credentials: 'include',
         });
         if (!res.ok) throw new Error('Translation failed');
         const data = await res.json();
