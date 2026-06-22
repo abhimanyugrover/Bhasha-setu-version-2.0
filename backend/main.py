@@ -52,6 +52,65 @@ app = FastAPI(title='Bhasha Setu API', lifespan=lifespan)
 
 # Serve frontend static files
 FRONTEND_DIR = Path(__file__).parent.parent / 'frontend'
+
+# In-memory HTML cache (for production performance)
+_inlined_html_cache = None
+
+def get_inlined_frontend():
+    global _inlined_html_cache
+    if os.environ.get("DEV") != "true" and _inlined_html_cache is not None:
+        return _inlined_html_cache
+
+    index_path = FRONTEND_DIR / 'index.html'
+    if not index_path.exists():
+        return None
+
+    html = index_path.read_text(encoding='utf-8')
+
+    # 1. Inline CSS
+    css_path = FRONTEND_DIR / 'css' / 'style.css'
+    if css_path.exists():
+        css_content = css_path.read_text(encoding='utf-8')
+        html = html.replace(
+            '<link rel="stylesheet" href="css/style.css">',
+            f'<style>\n{css_content}\n</style>'
+        )
+
+    # 2. Inline JS files
+    for js_name in ['api.js', 'components.js', 'app.js']:
+        js_path = FRONTEND_DIR / 'js' / js_name
+        if js_path.exists():
+            js_content = js_path.read_text(encoding='utf-8')
+            html = html.replace(
+                f'<script src="js/{js_name}" defer></script>',
+                f'<script>\n{js_content}\n</script>'
+            )
+            html = html.replace(
+                f'<script src="js/{js_name}"></script>',
+                f'<script>\n{js_content}\n</script>'
+            )
+
+    _inlined_html_cache = html
+    return html
+
+from fastapi.responses import HTMLResponse
+
+@app.get('/')
+async def serve_frontend():
+    html = get_inlined_frontend()
+    if html:
+        return HTMLResponse(
+            content=html,
+            status_code=200,
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
+    return JSONResponse({'error': 'Frontend not found'}, status_code=404)
+
+
 if FRONTEND_DIR.exists():
     if (FRONTEND_DIR / 'css').exists():
         app.mount('/css', StaticFiles(directory=str(FRONTEND_DIR / 'css')), name='css')
@@ -59,14 +118,6 @@ if FRONTEND_DIR.exists():
         app.mount('/js', StaticFiles(directory=str(FRONTEND_DIR / 'js')), name='js')
     if (FRONTEND_DIR / 'assets').exists():
         app.mount('/assets', StaticFiles(directory=str(FRONTEND_DIR / 'assets')), name='assets')
-
-
-@app.get('/')
-async def serve_frontend():
-    index = FRONTEND_DIR / 'index.html'
-    if index.exists():
-        return FileResponse(str(index))
-    return JSONResponse({'error': 'Frontend not found'}, status_code=404)
 
 
 # ── Languages endpoint ──
