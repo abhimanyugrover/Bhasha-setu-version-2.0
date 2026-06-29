@@ -63,7 +63,12 @@ def _friendly_error(e) -> str:
     if "removed"          in msg.lower(): return "This video has been removed."
     if "copyright"        in msg.lower(): return "Video unavailable due to copyright restrictions."
     if "confirm your age" in msg.lower(): return "This video requires sign-in to watch."
-    if "403"              in msg: return "YouTube blocked the request (403). Try updating yt-dlp: pip install --upgrade yt-dlp"
+    if "403"              in msg or "forbidden" in msg.lower():
+        return (
+            "YouTube blocked the request (403 Forbidden). Datacenter IPs (like Google Colab) are heavily blocked. "
+            "Please download the video locally on your browser (e.g. using a free tool like y2mate.is or savefrom.net) "
+            "and drag-and-drop the video file directly into the upload area!"
+        )
     return f"Could not access video: {msg[:200]}"
 
 
