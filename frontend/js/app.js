@@ -382,6 +382,8 @@ const App = {
             { pct: 0, msg: 'Waiting...' },
             { pct: 0, msg: 'Waiting...' },
             { pct: 0, msg: 'Waiting...' },
+            { pct: 0, msg: 'Waiting...' }
+        ];
         resultPanel.innerHTML = Components.progressDashboard(initialStages, 1, 'Submitting request...', false, false);
         resultPanel.scrollIntoView({ behavior: 'smooth' });
 
