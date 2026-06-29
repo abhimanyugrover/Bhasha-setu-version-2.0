@@ -153,16 +153,13 @@ bhasha-setu/
 | AI Chat | HuggingFace Inference API | Free |
 | Hosting | Hugging Face Spaces | Free |
 
-**Total monthly cost: $0** | **API keys required: 0**
 
 ---
 
 ## 👨‍💻 Author
 
 **Abhimanyu**
-B.Tech Computer Science · J.C. Bose University of Science & Technology, YMCA Faridabad
-
-Built for **AI for Bharat Hackathon 2026** 🏆
+B.Tech Robotics and AI · J.C. Bose University of Science & Technology, YMCA Faridabad
 
 ---
 
