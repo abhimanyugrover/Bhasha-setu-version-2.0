@@ -34,9 +34,7 @@ _PLATFORM_MAP = {
 }
 
 _FORMAT = (
-    f"bestvideo[height<={MAX_HEIGHT}][ext=mp4]+bestaudio[ext=m4a]"
-    f"/bestvideo[height<={MAX_HEIGHT}]+bestaudio"
-    f"/best[height<={MAX_HEIGHT}][ext=mp4]"
+    f"bestvideo[height<={MAX_HEIGHT}]+bestaudio"
     f"/best[height<={MAX_HEIGHT}]"
     f"/best"
 )
