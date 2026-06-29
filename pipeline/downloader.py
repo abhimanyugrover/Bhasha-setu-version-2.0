@@ -154,26 +154,97 @@ def get_video_info(url: str) -> dict:
 
 # ── Public: download to temp ──────────────────────────────────────────────────
 
+def _extract_youtube_id(url: str) -> Optional[str]:
+    import re
+    patterns = [
+        r"(?:v=|\/v\/|embed\/|shorts\/|\/youtu\.be\/)([a-zA-Z0-9_-]{11})",
+        r"(?:watch\?v=)([a-zA-Z0-9_-]{11})"
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _download_via_piped(url: str, output_path: str) -> bool:
+    import json
+    import urllib.request
+    import shutil
+    
+    video_id = _extract_youtube_id(url)
+    if not video_id:
+        return False
+        
+    log.info(f"Attempting to download YouTube video {video_id} via Piped API fallback...")
+    
+    instances = [
+        "https://pipedapi.kavin.rocks",
+        "https://api.piped.yt",
+        "https://pipedapi.col1a.dedyn.io",
+        "https://piped-api.lunar.icu"
+    ]
+    
+    for base_url in instances:
+        try:
+            api_url = f"{base_url}/streams/{video_id}"
+            req = urllib.request.Request(
+                api_url, 
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                
+            video_streams = data.get("videoStreams", [])
+            if not video_streams:
+                continue
+                
+            # Filter for mp4
+            mp4_streams = [s for s in video_streams if "mp4" in s.get("mimeType", "").lower() or s.get("format", "").lower() == "mpeg-4"]
+            if not mp4_streams:
+                mp4_streams = video_streams
+                
+            selected_stream = None
+            for q in ["720p", "480p", "360p"]:
+                for s in mp4_streams:
+                    if s.get("quality") == q:
+                        selected_stream = s
+                        break
+                if selected_stream:
+                    break
+                    
+            if not selected_stream:
+                selected_stream = mp4_streams[0]
+                
+            stream_url = selected_stream.get("url")
+            if not stream_url:
+                continue
+                
+            log.info(f"Piped stream URL found! Downloading stream from: {base_url}")
+            
+            stream_req = urllib.request.Request(
+                stream_url, 
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            with urllib.request.urlopen(stream_req, timeout=30) as src, open(output_path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+                
+            log.info(f"Successfully downloaded YouTube video via Piped stream: {output_path}")
+            return True
+            
+        except Exception as e:
+            log.warning(f"Piped instance {base_url} failed: {e}")
+            continue
+            
+    return False
+
+
 def download_to_temp(
     url:         str,
     progress_cb: Optional[Callable[[float, str], None]] = None,
 ) -> str:
     """
     Download a video from URL to a system temp file. Returns the local path.
-
-    The CALLER must delete the file after use.
-    The pipeline's Stage 1 calls this then immediately uploads to S3.
-
-    Args:
-        url:         Public video URL.
-        progress_cb: Optional callable(percent: float, message: str).
-
-    Returns:
-        Absolute path to downloaded MP4 temp file.
-
-    Raises:
-        ValueError  : private / unavailable / bad URL
-        RuntimeError: yt-dlp not installed, or unexpected failure
     """
     try:
         import yt_dlp
@@ -224,29 +295,46 @@ def download_to_temp(
         if progress_cb:
             progress_cb(0.0, "Connecting to video source…")
 
-        info = _with_cookie_fallback(_build, _run)
+        fallback_triggered = False
+        actual = ""
+
+        try:
+            info = _with_cookie_fallback(_build, _run)
+        except Exception as yt_err:
+            if "youtube" in url.lower() or "youtu.be" in url.lower():
+                log.warning(f"yt-dlp download failed: {yt_err}. Trying Piped API fallback...")
+                if progress_cb:
+                    progress_cb(10.0, "YouTube blocked checking. Using mirror download...")
+                actual = os.path.join(tmp_dir, "downloaded.mp4")
+                if _download_via_piped(url, actual):
+                    fallback_triggered = True
+                    info = {"dummy": True}
+                else:
+                    raise yt_err
+            else:
+                raise yt_err
 
         if not info:
             raise ValueError("Download returned no information.")
 
-        # Find the output file in tmp_dir
-        mp4s = sorted(
-            [os.path.join(tmp_dir, f) for f in os.listdir(tmp_dir)
-             if f.endswith(".mp4")],
-            key=os.path.getmtime,
-        )
-        if not mp4s:
-            # Check for any video file if mp4 merge didn't happen
-            all_vids = sorted(
+        # Find the output file if fallback was not triggered
+        if not fallback_triggered:
+            mp4s = sorted(
                 [os.path.join(tmp_dir, f) for f in os.listdir(tmp_dir)
-                 if os.path.splitext(f)[1] in (".mp4", ".mkv", ".webm")],
+                 if f.endswith(".mp4")],
                 key=os.path.getmtime,
             )
-            if not all_vids:
-                raise RuntimeError("Download finished but no output file found.")
-            actual = all_vids[-1]
-        else:
-            actual = mp4s[-1]
+            if not mp4s:
+                all_vids = sorted(
+                    [os.path.join(tmp_dir, f) for f in os.listdir(tmp_dir)
+                     if os.path.splitext(f)[1] in (".mp4", ".mkv", ".webm")],
+                    key=os.path.getmtime,
+                )
+                if not all_vids:
+                    raise RuntimeError("Download finished but no output file found.")
+                actual = all_vids[-1]
+            else:
+                actual = mp4s[-1]
 
         size_mb = os.path.getsize(actual) / (1024 * 1024)
         if progress_cb:
