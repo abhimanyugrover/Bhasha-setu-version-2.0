@@ -71,7 +71,7 @@ def _friendly_error(e) -> str:
 
 def _make_opts(extra: dict = {}) -> dict:
     """Base yt-dlp options shared by all calls."""
-    return {
+    opts = {
         "quiet":       True,
         "no_warnings": True,
         "noplaylist":  True,
@@ -79,6 +79,15 @@ def _make_opts(extra: dict = {}) -> dict:
         "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
         **extra,
     }
+    
+    # Auto-detect cookies.txt uploaded by the user to bypass YouTube datacenter blocks
+    for path in ["cookies.txt", "/content/cookies.txt"]:
+        if os.path.exists(path):
+            log.info(f"Using cookies file: {path}")
+            opts["cookiefile"] = path
+            break
+            
+    return opts
 
 
 def _with_cookie_fallback(build_opts_fn, run_fn):
