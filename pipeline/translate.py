@@ -29,13 +29,18 @@ def _get_nllb():
         log.info(f"Loading NLLB model: {NLLB_MODEL}")
         _tokenizer = AutoTokenizer.from_pretrained(NLLB_MODEL)
         raw_model = AutoModelForSeq2SeqLM.from_pretrained(NLLB_MODEL)
-        
-        # Apply 8-bit dynamic quantization to speed up CPU translation by 2x-4x
-        log.info("Applying dynamic quantization to NLLB model for CPU speedup...")
-        _model = torch.quantization.quantize_dynamic(
-            raw_model, {torch.nn.Linear}, dtype=torch.qint8
-        )
-        log.info("NLLB model loaded and quantized successfully.")
+
+        if torch.cuda.is_available():
+            # Use GPU directly — no quantization needed
+            log.info("Moving NLLB model to CUDA for GPU acceleration...")
+            _model = raw_model.to("cuda")
+        else:
+            # Apply 8-bit dynamic quantization to speed up CPU translation by 2x-4x
+            log.info("Applying dynamic quantization to NLLB model for CPU speedup...")
+            _model = torch.quantization.quantize_dynamic(
+                raw_model, {torch.nn.Linear}, dtype=torch.qint8
+            )
+        log.info("NLLB model loaded successfully.")
     return _model, _tokenizer
 
 
@@ -145,6 +150,9 @@ def translate_text(
             truncation=True,
             max_length=512,
         )
+        # Move inputs to the same device as the model (CPU or CUDA)
+        device = next(model.parameters()).device
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         outputs = model.generate(
             **inputs,
             forced_bos_token_id=target_token_id,

@@ -27,8 +27,24 @@ def _get_model():
     if _model is None:
         from faster_whisper import WhisperModel
         from pipeline.config import WHISPER_MODEL
-        log.info(f"Loading Whisper model: {WHISPER_MODEL}")
-        _model = WhisperModel(WHISPER_MODEL, compute_type="int8", device="cpu")
+        import os
+
+        # Auto-detect GPU: use CUDA if available, else CPU
+        device = os.environ.get("WHISPER_DEVICE", "cpu")
+        compute = os.environ.get("WHISPER_COMPUTE", "int8")
+
+        # Fallback: try CUDA detection if env vars not set
+        if device == "cpu":
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = "cuda"
+                    compute = "float16"
+            except ImportError:
+                pass
+
+        log.info(f"Loading Whisper model: {WHISPER_MODEL} (device={device}, compute={compute})")
+        _model = WhisperModel(WHISPER_MODEL, compute_type=compute, device=device)
     return _model
 
 
