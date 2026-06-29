@@ -97,6 +97,16 @@ const Components = {
         const statusIcon = done ? '✅' : (error ? '❌' : '⚙️');
         const stateClass = done ? 'done' : (error ? 'error' : '');
 
+        let cancelBtnHtml = '';
+        if (!done && !error) {
+            cancelBtnHtml = `
+                <div class="cancel-container" style="text-align: center; margin-top: 1.5rem; display: flex; justify-content: center;">
+                    <button id="cancel-dub-btn" class="select" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #fca5a5; padding: 10px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);">
+                        <span>🛑</span> Cancel Dubbing
+                    </button>
+                </div>`;
+        }
+
         return `
             <div class="progress-dashboard ${stateClass}">
                 <div class="pdash-header">
@@ -104,6 +114,7 @@ const Components = {
                     <span class="pdash-overall">${overall}%</span>
                 </div>
                 ${stagesHtml}
+                ${cancelBtnHtml}
             </div>`;
     },
 

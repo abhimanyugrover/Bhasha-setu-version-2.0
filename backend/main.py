@@ -206,6 +206,8 @@ def _run_job(job_id: str):
     job['status'] = JobStatus.RUNNING
     
     def progress_cb(stage: int, pct: float, msg: str):
+        if job.get('canceled', False):
+            raise RuntimeError('Job canceled by user')
         job['current_stage'] = stage
         job['stages'][stage - 1] = {'pct': min(100, pct), 'msg': msg}
         overall = sum(s['pct'] for s in job['stages']) / 5
@@ -279,6 +281,19 @@ async def get_job_status(job_id: str):
         detected_language=job.get('detected_language'),
         error=job.get('error'),
     )
+
+
+# ── Job cancel endpoint ──
+@app.post('/api/dub/{job_id}/cancel')
+async def cancel_job(job_id: str):
+    if job_id not in jobs:
+        raise HTTPException(404, 'Job not found')
+    job = jobs[job_id]
+    job['status'] = JobStatus.FAILED
+    job['error'] = 'Job canceled by user'
+    job['canceled'] = True
+    _notify_ws(job_id, {'type': 'error', 'message': 'Job canceled by user'})
+    return {'status': 'canceled'}
 
 
 # ── Download endpoint ──

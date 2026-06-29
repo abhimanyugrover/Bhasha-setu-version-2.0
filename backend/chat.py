@@ -41,7 +41,7 @@ def chat_with_ai(message: str, transcript_context: str = '', language: str = 'En
         from huggingface_hub import InferenceClient
         client = InferenceClient(token=hf_token if hf_token else None)
         response = client.chat_completion(
-            model='HuggingFaceH4/zephyr-7b-beta',
+            model='Qwen/Qwen2.5-7B-Instruct',
             messages=messages,
             max_tokens=512,
             temperature=0.7,

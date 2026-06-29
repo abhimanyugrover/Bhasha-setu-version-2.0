@@ -257,6 +257,7 @@ def _segmented_dubbing(
     """
     import subprocess
     import shutil
+    import concurrent.futures
 
     # 1. Extract 30s general voice reference in case local segments are too short
     general_speaker_wav = os.path.join(OUTPUT_DIR, f"{job_id}_speaker_general.wav")
@@ -285,30 +286,18 @@ def _segmented_dubbing(
 
     concat_list_file = os.path.join(OUTPUT_DIR, f"{job_id}_concat_list.txt")
     temp_files_to_clean = []
-
     concat_files = []
-    current_time = 0.0
-
+    
     total_segments = len(segments)
 
+    # 2. Prepare tasks (sequential reference extraction & translation)
+    tasks = []
     for idx, seg in enumerate(segments):
         start = seg["start"]
         end = seg["end"]
         orig_text = seg["text"]
 
-        # A. Handle silence gap before the segment
-        if start > current_time:
-            silence_dur = start - current_time
-            silence_wav = os.path.join(OUTPUT_DIR, f"{job_id}_silence_{idx}.wav")
-            subprocess.run([
-                "ffmpeg", "-y", "-loglevel", "error",
-                "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
-                "-t", f"{silence_dur:.3f}", silence_wav
-            ], check=True)
-            concat_files.append(silence_wav)
-            temp_files_to_clean.append(silence_wav)
-
-        # B. Translate this segment's text
+        # A. Translate
         from pipeline.translate import translate_text
         try:
             translated_text = translate_text(orig_text, target_language)
@@ -316,7 +305,7 @@ def _segmented_dubbing(
             log.warning(f"Translation failed for segment {idx}: {e}")
             translated_text = orig_text
 
-        # C. Extract this specific segment's audio from video as reference voice
+        # B. Extract audio reference for gender/cloning
         seg_ref_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_ref_{idx}.wav")
         ref_used = ""
         try:
@@ -331,16 +320,24 @@ def _segmented_dubbing(
         except Exception:
             ref_used = general_speaker_wav
 
-        # If extracted audio is too short, use general voice instead
-        if ref_used and ref_used == seg_ref_wav:
-            if _get_wav_duration(seg_ref_wav) < 1.0:
-                ref_used = general_speaker_wav
+        if ref_used == seg_ref_wav and _get_wav_duration(seg_ref_wav) < 1.0:
+            ref_used = general_speaker_wav
 
-        # D. Synthesize segment text
+        # C. Detect speaker gender for edge-tts
+        seg_gender = "Female"
+        if ref_used and os.path.exists(ref_used):
+            try:
+                from pipeline.gender_detector import detect_gender
+                seg_gender = detect_gender(ref_used)
+            except Exception:
+                pass
+
+        tasks.append((idx, translated_text, ref_used, orig_text, seg_gender))
+
+    # 3. Parallel Synthesis (for edge-tts) or Sequential (for omnivoice)
+    def run_synth(idx, translated_text, ref_used, orig_text, seg_gender):
         seg_synth_mp3 = os.path.join(OUTPUT_DIR, f"{job_id}_seg_synth_{idx}.mp3")
-        seg_synth_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_synth_{idx}.wav")
         temp_files_to_clean.append(seg_synth_mp3)
-        temp_files_to_clean.append(seg_synth_wav)
 
         synthesize_speech(
             text=translated_text,
@@ -349,15 +346,56 @@ def _segmented_dubbing(
             pitch_percent=voice_pitch,
             tts_engine=tts_engine,
             speaker_wav=ref_used,
-            ref_text=orig_text
+            ref_text=orig_text,
+            gender=seg_gender
         )
 
+        if not os.path.exists(seg_synth_mp3):
+            raise RuntimeError(f"Synthesis output not found for segment {idx}")
+
+        seg_synth_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_synth_{idx}.wav")
+        temp_files_to_clean.append(seg_synth_wav)
+        
         subprocess.run([
             "ffmpeg", "-y", "-loglevel", "error",
             "-i", seg_synth_mp3, seg_synth_wav
         ], check=True)
 
-        # E. Timing alignment: Speed adjust and Pad/Trim
+        if progress_cb:
+            progress_cb(4, 10 + ((idx + 1) / total_segments) * 85, f"Synthesized segment {idx+1}/{total_segments}…")
+
+    if tts_engine == "edge":
+        log.info(f"Synthesizing {total_segments} segments in parallel (edge-tts)...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(run_synth, *t) for t in tasks]
+            concurrent.futures.wait(futures)
+            for f in futures:
+                f.result()
+    else:
+        log.info(f"Synthesizing {total_segments} segments sequentially ({tts_engine})...")
+        for t in tasks:
+            run_synth(*t)
+
+    # 4. Sequential speed-matching, padding/trimming, and silence concatenation
+    current_time = 0.0
+    for idx, seg in enumerate(segments):
+        start = seg["start"]
+        end = seg["end"]
+
+        # A. Silence gap
+        if start > current_time:
+            silence_dur = start - current_time
+            silence_wav = os.path.join(OUTPUT_DIR, f"{job_id}_silence_{idx}.wav")
+            subprocess.run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                "-t", f"{silence_dur:.3f}", silence_wav
+            ], check=True)
+            concat_files.append(silence_wav)
+            temp_files_to_clean.append(silence_wav)
+
+        # B. Speed match & Pad/Trim
+        seg_synth_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_synth_{idx}.wav")
         target_dur = end - start
         synth_dur = _get_wav_duration(seg_synth_wav)
 
@@ -395,9 +433,6 @@ def _segmented_dubbing(
 
         concat_files.append(seg_final_wav)
         current_time = end
-
-        if progress_cb:
-            progress_cb(4, 10 + ((idx + 1) / total_segments) * 85, f"Synthesized segment {idx+1}/{total_segments}…")
 
     # F. Handle trailing silence if needed
     if video_duration > current_time:

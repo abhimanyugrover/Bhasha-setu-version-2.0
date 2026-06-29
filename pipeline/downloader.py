@@ -76,6 +76,7 @@ def _make_opts(extra: dict = {}) -> dict:
         "no_warnings": True,
         "noplaylist":  True,
         "http_headers": {"User-Agent": _UA},
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}},
         **extra,
     }
 

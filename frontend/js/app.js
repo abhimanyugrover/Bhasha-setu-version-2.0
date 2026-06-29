@@ -382,10 +382,35 @@ const App = {
             { pct: 0, msg: 'Waiting...' },
             { pct: 0, msg: 'Waiting...' },
             { pct: 0, msg: 'Waiting...' },
-            { pct: 0, msg: 'Waiting...' }
-        ];
         resultPanel.innerHTML = Components.progressDashboard(initialStages, 1, 'Submitting request...', false, false);
         resultPanel.scrollIntoView({ behavior: 'smooth' });
+
+        // Add Cancel Event listener
+        const resultPanelListener = async (e) => {
+            if (e.target && (e.target.id === 'cancel-dub-btn' || e.target.closest('#cancel-dub-btn'))) {
+                const jobId = this.state.currentJob;
+                if (!jobId) return;
+                
+                const btn = document.getElementById('cancel-dub-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                    btn.innerHTML = '<span>⏳</span> Canceling...';
+                }
+                
+                try {
+                    await fetch(`/api/dub/${jobId}/cancel`, { method: 'POST' });
+                } catch (err) {
+                    console.error('Cancel request failed:', err);
+                }
+            }
+        };
+        
+        if (this._resultPanelListener) {
+            resultPanel.removeEventListener('click', this._resultPanelListener);
+        }
+        this._resultPanelListener = resultPanelListener;
+        resultPanel.addEventListener('click', resultPanelListener);
 
         try {
             const resp = await API.startDubbing(fd);
