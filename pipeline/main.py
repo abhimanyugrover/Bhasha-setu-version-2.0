@@ -230,6 +230,228 @@ def run_tts_and_mux(
     }
 
 
+def _get_wav_duration(wav_path: str) -> float:
+    """Return wave file duration in seconds."""
+    import wave
+    try:
+        with wave.open(wav_path, 'rb') as f:
+            frames = f.getnframes()
+            rate = f.getframerate()
+            return frames / float(rate) if rate > 0 else 0.0
+    except Exception:
+        return 0.0
+
+
+def _segmented_dubbing(
+    video_path: str,
+    segments: list,
+    target_language: str,
+    tts_engine: str,
+    voice_pitch: int,
+    progress_cb,
+    job_id: str,
+) -> str:
+    """
+    Segmented translation, synthesis, speed-matching, and concatenation.
+    Returns the path to the final concatenated audio MP3 file.
+    """
+    import subprocess
+    import shutil
+
+    # 1. Extract 30s general voice reference in case local segments are too short
+    general_speaker_wav = os.path.join(OUTPUT_DIR, f"{job_id}_speaker_general.wav")
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", video_path, "-vn", "-ac", "1", "-ar", "16000",
+            "-t", "30", "-acodec", "pcm_s16le", general_speaker_wav
+        ], check=True)
+    except Exception as e:
+        log.warning(f"Failed to extract general speaker reference: {e}")
+        general_speaker_wav = ""
+
+    # Get original video's audio duration using ffprobe
+    video_duration = 0.0
+    try:
+        res = subprocess.run([
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", video_path
+        ], capture_output=True, text=True, check=True)
+        video_duration = float(res.stdout.strip())
+    except Exception as e:
+        log.warning(f"Failed to get video duration: {e}")
+        if segments:
+            video_duration = segments[-1]["end"] + 2.0
+
+    concat_list_file = os.path.join(OUTPUT_DIR, f"{job_id}_concat_list.txt")
+    temp_files_to_clean = []
+
+    concat_files = []
+    current_time = 0.0
+
+    total_segments = len(segments)
+
+    for idx, seg in enumerate(segments):
+        start = seg["start"]
+        end = seg["end"]
+        orig_text = seg["text"]
+
+        # A. Handle silence gap before the segment
+        if start > current_time:
+            silence_dur = start - current_time
+            silence_wav = os.path.join(OUTPUT_DIR, f"{job_id}_silence_{idx}.wav")
+            subprocess.run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+                "-t", f"{silence_dur:.3f}", silence_wav
+            ], check=True)
+            concat_files.append(silence_wav)
+            temp_files_to_clean.append(silence_wav)
+
+        # B. Translate this segment's text
+        from pipeline.translate import translate_text
+        try:
+            translated_text = translate_text(orig_text, target_language)
+        except Exception as e:
+            log.warning(f"Translation failed for segment {idx}: {e}")
+            translated_text = orig_text
+
+        # C. Extract this specific segment's audio from video as reference voice
+        seg_ref_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_ref_{idx}.wav")
+        ref_used = ""
+        try:
+            subprocess.run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
+                "-i", video_path, "-vn", "-ac", "1", "-ar", "16000",
+                "-acodec", "pcm_s16le", seg_ref_wav
+            ], check=True)
+            ref_used = seg_ref_wav
+            temp_files_to_clean.append(seg_ref_wav)
+        except Exception:
+            ref_used = general_speaker_wav
+
+        # If extracted audio is too short, use general voice instead
+        if ref_used and ref_used == seg_ref_wav:
+            if _get_wav_duration(seg_ref_wav) < 1.0:
+                ref_used = general_speaker_wav
+
+        # D. Synthesize segment text
+        seg_synth_mp3 = os.path.join(OUTPUT_DIR, f"{job_id}_seg_synth_{idx}.mp3")
+        seg_synth_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_synth_{idx}.wav")
+        temp_files_to_clean.append(seg_synth_mp3)
+        temp_files_to_clean.append(seg_synth_wav)
+
+        synthesize_speech(
+            text=translated_text,
+            output_mp3=seg_synth_mp3,
+            lang_name=target_language,
+            pitch_percent=voice_pitch,
+            tts_engine=tts_engine,
+            speaker_wav=ref_used,
+            ref_text=orig_text
+        )
+
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", seg_synth_mp3, seg_synth_wav
+        ], check=True)
+
+        # E. Timing alignment: Speed adjust and Pad/Trim
+        target_dur = end - start
+        synth_dur = _get_wav_duration(seg_synth_wav)
+
+        speed_adjusted_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_adjusted_{idx}.wav")
+        temp_files_to_clean.append(speed_adjusted_wav)
+
+        if synth_dur > 0 and target_dur > 0:
+            speed_factor = synth_dur / target_dur
+            speed_factor = min(1.5, max(0.8, speed_factor))
+
+            filter_str = f"atempo={speed_factor}"
+            if speed_factor > 2.0:
+                filter_str = f"atempo=2.0,atempo={speed_factor/2.0}"
+            elif speed_factor < 0.5:
+                filter_str = f"atempo=0.5,atempo={speed_factor/0.5}"
+
+            subprocess.run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-i", seg_synth_wav,
+                "-filter:a", filter_str,
+                speed_adjusted_wav
+            ], check=True)
+        else:
+            shutil.copyfile(seg_synth_wav, speed_adjusted_wav)
+
+        seg_final_wav = os.path.join(OUTPUT_DIR, f"{job_id}_seg_final_{idx}.wav")
+        temp_files_to_clean.append(seg_final_wav)
+
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", speed_adjusted_wav,
+            "-af", "apad", "-t", f"{target_dur:.3f}",
+            seg_final_wav
+        ], check=True)
+
+        concat_files.append(seg_final_wav)
+        current_time = end
+
+        if progress_cb:
+            progress_cb(4, 10 + ((idx + 1) / total_segments) * 85, f"Synthesized segment {idx+1}/{total_segments}…")
+
+    # F. Handle trailing silence if needed
+    if video_duration > current_time:
+        trailing_dur = video_duration - current_time
+        trailing_wav = os.path.join(OUTPUT_DIR, f"{job_id}_trailing_silence.wav")
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
+            "-t", f"{trailing_dur:.3f}", trailing_wav
+        ], check=True)
+        concat_files.append(trailing_wav)
+        temp_files_to_clean.append(trailing_wav)
+
+    # G. Concatenate all files
+    final_dubbed_wav = os.path.join(OUTPUT_DIR, f"{job_id}_dubbed_aligned.wav")
+    with open(concat_list_file, "w", encoding="utf-8") as f:
+        for p in concat_files:
+            abs_path = os.path.abspath(p).replace("\\", "\\\\")
+            f.write(f"file '{abs_path}'\n")
+
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-f", "concat", "-safe", "0",
+            "-i", concat_list_file, "-c", "copy", final_dubbed_wav
+        ], check=True)
+    finally:
+        if os.path.exists(concat_list_file):
+            try: os.unlink(concat_list_file)
+            except Exception: pass
+
+        if general_speaker_wav and os.path.exists(general_speaker_wav):
+            try: os.unlink(general_speaker_wav)
+            except Exception: pass
+
+        for f in temp_files_to_clean:
+            if os.path.exists(f):
+                try: os.unlink(f)
+                except Exception: pass
+
+    final_dubbed_mp3 = os.path.join(OUTPUT_DIR, f"{job_id}_dubbed.mp3")
+    subprocess.run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", final_dubbed_wav, "-codec:a", "libmp3lame", "-qscale:a", "2",
+        final_dubbed_mp3
+    ], check=True)
+
+    if os.path.exists(final_dubbed_wav):
+        try: os.unlink(final_dubbed_wav)
+        except Exception: pass
+
+    return final_dubbed_mp3
+
+
 def run_pipeline(
     video_path:          str   = "",
     target_language:     str   = "",
@@ -240,26 +462,11 @@ def run_pipeline(
     video_url:           str   = "",
     bg_music_vol:        float = 0.0,
     words_per_subtitle:  int   = 8,
+    align_timing:        bool  = True,
+    tts_engine:          str   = "edge",
 ) -> dict:
     """
     Run the full Bhasha-Setu any-to-any dubbing pipeline.
-
-    Accepts either video_path (upload) or video_url (YouTube/Vimeo/etc).
-
-    Args:
-        video_path:         Local path to source video.
-        target_language:    Target language name (e.g. "Hindi", "Tamil").
-        progress_cb:        Optional callable(stage, sub_pct, message).
-        generate_srt:       Generate .srt subtitle file.
-        voice_pitch:        Pitch shift percent (-20..+20).
-        vol_boost:          Volume multiplier (default 2.0).
-        video_url:          Public video URL.
-        bg_music_vol:       Background music volume (0.0 = off).
-        words_per_subtitle: Words per SRT block.
-
-    Returns:
-        dict: output_path, transcript, translation, job_id, language, srt_path,
-              detected_language_code
     """
     _setup_logging()
 
@@ -307,7 +514,7 @@ def run_pipeline(
             "-i", video_path, "-vn", "-ac", "1", "-ar", "16000",
             "-t", "30", "-acodec", "pcm_s16le", wav_path
         ], check=True, capture_output=True)
-        
+
         from pipeline.gender_detector import detect_gender
         detected_gender = detect_gender(wav_path)
         log.info(f"Auto-detected original speaker gender: {detected_gender}")
@@ -322,7 +529,7 @@ def run_pipeline(
     def transcribe_progress(elapsed_pct: float, status: str):
         _prog(2, min(95, elapsed_pct), f"Whisper: {status}")
 
-    transcript, word_timestamps, detected_lang = transcribe_video(
+    transcript, word_timestamps, detected_lang, segments_list = transcribe_video(
         video_path,
         progress_cb=transcribe_progress,
         return_timestamps=generate_srt,
@@ -368,16 +575,44 @@ def run_pipeline(
     # Stage 4: Synthesize
     _prog(4, 5, f"Initializing {lang_cfg['tts'].upper()} engine…")
 
-    def synth_progress(chunk_i: int, total_chunks: int):
-        pct = 10 + (chunk_i / max(1, total_chunks)) * 85
-        _prog(4, pct, f"Synthesizing chunk {chunk_i}/{total_chunks}…")
-
     mp3_path = os.path.join(OUTPUT_DIR, f"{job_id}_dubbed.mp3")
-    synthesize_speech(
-        translation, mp3_path, target_language,
-        progress_cb=synth_progress, pitch_percent=voice_pitch,
-        gender=detected_gender,
-    )
+
+    if align_timing and segments_list:
+        _prog(4, 10, "Starting timing-aligned segmented synthesis…")
+        _segmented_dubbing(
+            video_path=video_path,
+            segments=segments_list,
+            target_language=target_language,
+            tts_engine=tts_engine,
+            voice_pitch=voice_pitch,
+            progress_cb=_prog,
+            job_id=job_id,
+        )
+    else:
+        def synth_progress(chunk_i: int, total_chunks: int):
+            pct = 10 + (chunk_i / max(1, total_chunks)) * 85
+            _prog(4, pct, f"Synthesizing chunk {chunk_i}/{total_chunks}…")
+
+        speaker_ref_wav = ""
+        if tts_engine == "omnivoice":
+            speaker_ref_wav = os.path.join(OUTPUT_DIR, f"{job_id}_speaker_ref.wav")
+            subprocess.run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-i", video_path, "-vn", "-ac", "1", "-ar", "16000",
+                "-t", "30", "-acodec", "pcm_s16le", speaker_ref_wav
+            ], check=True)
+
+        synthesize_speech(
+            translation, mp3_path, target_language,
+            progress_cb=synth_progress, pitch_percent=voice_pitch,
+            gender=detected_gender, tts_engine=tts_engine,
+            speaker_wav=speaker_ref_wav, ref_text=transcript,
+        )
+
+        if speaker_ref_wav and os.path.exists(speaker_ref_wav):
+            try: os.unlink(speaker_ref_wav)
+            except Exception: pass
+
     _prog(4, 100, "Audio synthesized")
 
     # Stage 5: Mux

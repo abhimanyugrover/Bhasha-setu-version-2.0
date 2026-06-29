@@ -162,6 +162,71 @@ def _synthesize_gtts(
     return output_mp3
 
 
+# ── OMNIVOICE ZERO-SHOT CLONING ──────────────────────────────────────────────
+
+_omnivoice_model = None
+
+def _get_omnivoice():
+    global _omnivoice_model
+    if _omnivoice_model is None:
+        import os
+        # Bypasses the interactive agreement prompt programmatically
+        os.environ["COQUI_TOS_AGREED"] = "1"
+        from omnivoice import OmniVoice
+        import torch
+        log.info("Loading OmniVoice model 'k2-fsa/OmniVoice'...")
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        dtype = torch.float16 if device.startswith("cuda") else torch.float32
+        _omnivoice_model = OmniVoice.from_pretrained(
+            "k2-fsa/OmniVoice", 
+            device_map=device,
+            dtype=dtype, 
+            load_asr=True
+        )
+        log.info("OmniVoice model loaded successfully.")
+    return _omnivoice_model
+
+
+def _synthesize_omnivoice(
+    text: str,
+    output_mp3: str,
+    speaker_wav: str,
+    ref_text: str,
+    target_lang_code: str,
+) -> str:
+    import soundfile as sf
+    import torch
+    import subprocess
+
+    model = _get_omnivoice()
+    log.info(f"omnivoice | target_lang={target_lang_code} | ref_audio={speaker_wav} | ref_text={ref_text}")
+
+    audio = model.generate(
+        text=text,
+        language=target_lang_code,
+        ref_audio=speaker_wav,
+        ref_text=ref_text
+    )
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+        temp_wav = tf.name
+
+    try:
+        sf.write(temp_wav, audio[0].cpu().numpy(), model.sampling_rate)
+        # Convert WAV to MP3 using FFmpeg
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", temp_wav, "-codec:a", "libmp3lame", "-qscale:a", "2",
+            output_mp3
+        ], check=True)
+    finally:
+        if os.path.exists(temp_wav):
+            try: os.unlink(temp_wav)
+            except Exception: pass
+
+    return output_mp3
+
+
 # ── PUBLIC API ────────────────────────────────────────────────────────────────
 
 def synthesize_speech(
@@ -171,6 +236,9 @@ def synthesize_speech(
     progress_cb=None,
     pitch_percent: int = 0,
     gender: str = "Female",
+    tts_engine: str = "edge",
+    speaker_wav: str = "",
+    ref_text: str = "",
 ) -> str:
     """
     Synthesize speech for the given text and language.
@@ -182,6 +250,9 @@ def synthesize_speech(
         progress_cb:   Optional callable(chunk_index, total_chunks).
         pitch_percent: Pitch offset percent (-20 to +20).
         gender:        Estimated speaker gender ("Male" or "Female").
+        tts_engine:    TTS engine to use ("edge", "gtts", or "omnivoice").
+        speaker_wav:   Reference audio file for voice cloning (for omnivoice).
+        ref_text:      Transcription of speaker_wav (for omnivoice).
 
     Returns:
         output_mp3 path
@@ -190,7 +261,22 @@ def synthesize_speech(
         raise ValueError("TTS text is empty.")
 
     lang_cfg = LANGUAGES[lang_name].copy()  # copy config to avoid mutating registry globally
-    engine   = lang_cfg["tts"]
+
+    if tts_engine == "omnivoice":
+        if not speaker_wav:
+            log.warning("OmniVoice requested but no speaker_wav provided. Falling back to edge-tts.")
+            tts_engine = "edge"
+        else:
+            lang_code = lang_cfg.get("gtts_lang", "en")
+            if not ref_text:
+                ref_text = "This is a clean voice recording sample."
+            try:
+                return _synthesize_omnivoice(text, output_mp3, speaker_wav, ref_text, lang_code)
+            except Exception as e:
+                log.error(f"OmniVoice synthesis failed: {e}. Falling back to default edge-tts engine.")
+                tts_engine = "edge"
+
+    engine = lang_cfg["tts"] if tts_engine == "edge" else tts_engine
 
     # Swap voice dynamically for edge-tts based on gender detection
     if engine == "edge":

@@ -144,10 +144,23 @@
                     <details class="options-expander" style="margin-top: 20px;">
                         <summary>⚙️ Advanced Audio Settings</summary>
                         <div class="options-grid" style="margin-top: 14px;">
-                            <label class="checkbox-label">
+                            <label class="checkbox-label" style="grid-column: span 2;">
                                 <input type="checkbox" id="gen-srt" checked>
                                 <span>Generate Subtitle file (.SRT)</span>
                             </label>
+
+                            <label class="checkbox-label" style="grid-column: span 2; margin-top: 6px;">
+                                <input type="checkbox" id="align-timing" checked>
+                                <span>Sync Voice with Video Timing (Duration Match)</span>
+                            </label>
+
+                            <div class="slider-group" style="grid-column: span 2; margin-top: 6px; margin-bottom: 10px;">
+                                <label class="label" for="tts-engine" style="margin-bottom: 6px;">TTS Synthesis Engine</label>
+                                <select id="tts-engine" class="select">
+                                    <option value="edge">Default (edge-tts Neural)</option>
+                                    <option value="omnivoice">Voice Clone (OmniVoice) [GPU Recommended]</option>
+                                </select>
+                            </div>
                             
                             <div class="slider-group">
                                 <label for="voice-pitch">

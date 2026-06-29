@@ -369,6 +369,8 @@ const App = {
         fd.append('voice_pitch', document.getElementById('voice-pitch')?.value || 0);
         fd.append('vol_boost', document.getElementById('vol-boost')?.value || 2.0);
         fd.append('bg_music_vol', document.getElementById('bg-music')?.value || 0.0);
+        fd.append('tts_engine', document.getElementById('tts-engine')?.value || 'edge');
+        fd.append('align_timing', document.getElementById('align-timing')?.checked || false);
 
         // Update button status
         startBtn.disabled = true;

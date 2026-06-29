@@ -100,7 +100,8 @@ def transcribe_video(
         transcript = cached["transcript"]
         detected   = cached.get("detected_language_code", "en")
         word_items = cached.get("word_items", []) if return_timestamps else []
-        return transcript, word_items, detected
+        segments_data = cached.get("segments", [])
+        return transcript, word_items, detected, segments_data
 
     # 2. Load model
     if progress_cb:
@@ -126,11 +127,17 @@ def transcribe_video(
     # 4. Collect segments
     transcript_parts = []
     word_items = []
+    segments_data = []
     segments_list = list(segments_gen)      # materialize generator
     total_segments = len(segments_list)
 
     for idx, segment in enumerate(segments_list):
         transcript_parts.append(segment.text.strip())
+        segments_data.append({
+            "text": segment.text.strip(),
+            "start": round(segment.start, 3),
+            "end": round(segment.end, 3)
+        })
 
         # 5. Word-level timestamps
         if return_timestamps and segment.words:
@@ -155,6 +162,7 @@ def transcribe_video(
             "file_hash":              fhash,
             "transcript":             transcript,
             "word_items":             word_items,
+            "segments":               segments_data,
             "detected_language_code": detected_lang,
         }, f, ensure_ascii=False, indent=2)
 
@@ -166,7 +174,7 @@ def transcribe_video(
         progress_cb(100.0, "Transcription complete")
 
     # 7. Return
-    return transcript, (word_items if return_timestamps else []), detected_lang
+    return transcript, (word_items if return_timestamps else []), detected_lang, segments_data
 
 
 # ─────────────────────────────────────────────────────────────────────────────

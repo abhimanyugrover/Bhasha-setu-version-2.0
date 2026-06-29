@@ -149,6 +149,8 @@ async def start_dubbing(
     voice_pitch: int = Form(0),
     vol_boost: float = Form(2.0),
     bg_music_vol: float = Form(0.0),
+    tts_engine: str = Form('edge'),
+    align_timing: bool = Form(True),
 ):
     if not video and not video_url:
         raise HTTPException(400, 'Provide either a video file or URL')
@@ -180,6 +182,8 @@ async def start_dubbing(
         'voice_pitch': voice_pitch,
         'vol_boost': vol_boost,
         'bg_music_vol': bg_music_vol,
+        'tts_engine': tts_engine,
+        'align_timing': align_timing,
         'output_path': '',
         'transcript': '',
         'translation': '',
@@ -228,6 +232,8 @@ def _run_job(job_id: str):
             voice_pitch=job['voice_pitch'],
             vol_boost=job['vol_boost'],
             bg_music_vol=job['bg_music_vol'],
+            align_timing=job.get('align_timing', True),
+            tts_engine=job.get('tts_engine', 'edge'),
         )
         job['status'] = JobStatus.COMPLETED
         job['output_path'] = result['output_path']
